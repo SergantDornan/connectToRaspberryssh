@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
     code = system(cmd.c_str());
     if(code != 0) return 1;
     close(fd);
-    cmd = "sshpass -p '" + password + "' ssh -tt " + login + "@" + ip;
+    cmd = "sshpass -p '" + password + "' ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null " + login + "@" + ip;
     std::ofstream out(connect);
     out << "#!/bin/bash\nset -e" << std::endl;
     out << cmd << std::endl;
