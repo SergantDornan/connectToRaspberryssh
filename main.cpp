@@ -7,12 +7,13 @@
 
 void help(){
     std::cout << "Usage: " << std::endl;
+    std::cout << "-wifi <1/0> - use existing wifi" << std::endl;
     std::cout << "-wn <wifi name> - wifi network" << std::endl;
     std::cout << "-wp <wifi password> - wifi password" << std::endl;
-    std::cout << "(optional) -p <portname> - set port name, default port name is /dev/ttyUSB0" << std::endl;
-    std::cout << "(optional) -b <baud rate> - set baud rate, default baud rate is 115200" << std::endl;
-    std::cout << "(optional) -login <login> - set raspberry login" << std::endl;
-    std::cout << "(optional) -password <password> - set raspberry password" << std::endl;
+    std::cout << "-p <portname> - set port name, default port name is /dev/ttyUSB0" << std::endl;
+    std::cout << "-b <baud rate> - set baud rate, default baud rate is 115200" << std::endl;
+    std::cout << "-login <login> - set raspberry login" << std::endl;
+    std::cout << "-password <password> - set raspberry password" << std::endl;
     std::cout << std::endl;
 }
 
@@ -22,6 +23,7 @@ const std::string name = "setssh_to_raspberry";
 const std::string connect = "connect.sh";
 const std::string hotspotSSID = "Malina";
 const std::string hotstopPassword = "UberPass228";
+const std::string wifi_config = "wifi_config";
 
 int main(int argc, char* argv[]) {
 
@@ -47,12 +49,41 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    auto parameters = getParameters(args, {"-b", "-p", "-login", "-password"});
+    auto parameters = getParameters(args, {"-b", "-p", "-login", "-password", "-wn", "-wp", "-wifi"});
 
+    bool use_real_wifi = (parameters[6] == "1");
     int baud_rate = (parameters[0] == "-1") ? get_baudrate(115200) : get_baudrate(stoi(parameters[0]));
     std::string portname = (parameters[1] == "-1") ? "/dev/ttyUSB0" : parameters[1];
     std::string login = (parameters[2] == "-1") ?  defaultLogin : parameters[2];
     std::string password = (parameters[3] == "-1") ? defaultPassword : parameters[3]; 
+
+    if(use_real_wifi){
+        std::vector<std::string> lines;
+        std::string line;
+        std::ifstream in(wifi_config);
+        while(std::getline(in, line)) lines.push_back(line);
+        in.close();
+        if((lines[0] == "-1" || lines[1] == "-1") && 
+            (parameters[4] == "-1" || parameters[5] == "-1"))
+        {
+            std::cout << "Enter wifi name and password" << std::endl;
+            std::cout << std::endl;
+            return 1;
+        }        
+
+        if(parameters[4] != "-1") lines[0] = parameters[4];
+        if(parameters[5] != "-1") lines[1] = parameters[5];
+
+        if(parameters[4] != "-1" || parameters[5] != "-1"){
+            std::ofstream out(wifi_config);
+            out << lines[0] << std::endl;
+            out << lines[1] << std::endl;
+            out.close();
+        }
+
+        parameters[4] = lines[0];
+        parameters[5] = lines[1];
+    }
 
     if(!exists(portname)){
         std::cout << "Cannot find " << portname << std::endl;
@@ -92,17 +123,17 @@ int main(int argc, char* argv[]) {
 
     // login:
     sendCommand(fd, "ls");
-    auto response = readResponse(fd, 3);
+    auto response = readResponse(fd, 1);
     if (response.size() == 2 && response[0] == "ls" && response[1] == "Password:"){
         std::cout << "Trying to login..." << std::endl; 
         sendCommand(fd, "");
         usleep(5000000);
         sendCommand(fd, login);
         usleep(100000);
-        response = readResponse(fd, 3);
+        response = readResponse(fd, 1);
         sendCommand(fd, password);
         usleep(500000);
-        response = readResponse(fd, 3);
+        response = readResponse(fd, 1);
         if(response.size() > 0 && response[0] == "Login incorrect"){
             std::cout << "Login incorrect" << std::endl;
             std::cout << std::endl;
@@ -115,38 +146,48 @@ int main(int argc, char* argv[]) {
     std::cout << "Turning wifi on..." << std::endl;
     std::string cmd = "sudo nmcli radio wifi on";
     sendCommand(fd, cmd);
-    response = readResponse(fd, 3);
+    response = readResponse(fd, 1);
 
     bool needAuth = false;
     for(int i = 0; i < response.size(); ++i){
         if(response[i].find("[sudo] password for " + login + ":") != std::string::npos){
+            std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAa" << std::endl;
             needAuth = true;
             break;
         }
     }
     if(needAuth){
         sendCommand(fd, password);
-        response = readResponse(fd, 3);
+        response = readResponse(fd, 1);
     }
 
-    std::cout << "Activating hotspot..." << std::endl;
-    cmd = "sudo nmcli device wifi hotspot ifname wlan0 ssid " + hotspotSSID + " password " + hotstopPassword;
-    sendCommand(fd, cmd);
-    response = readResponse(fd, 3);
-    bool hotspotactive = false;
-    for(int i = 0; i < response.size(); ++i){
-        if(response[i].find("Device 'wlan0' successfully activated with")  != std::string::npos){
-            hotspotactive = true;
-            break;
+    if(use_real_wifi){
+        std::cout << "Conncecting to " << parameters[4] << " newtwork...";
+        cmd = "sudo nmcli d wifi connect " + parameters[4] << " password " << parameters[5];
+        sendCommand(fd, cmd);
+        response = readResponse(fd, 1);
+    }
+    else{
+        std::cout << "Activating hotspot..." << std::endl;
+        cmd = "sudo nmcli device wifi hotspot ifname wlan0 ssid " + hotspotSSID + " password " + hotstopPassword;
+        sendCommand(fd, cmd);
+        response = readResponse(fd, 1);
+        bool hotspotactive = false;
+        for(int i = 0; i < response.size(); ++i){
+            if(response[i].find("Device 'wlan0' successfully activated with")  != std::string::npos){
+                hotspotactive = true;
+                break;
+            }
         }
+        //if(hotspotactive) std::cout << "Hotspot active" << std::endl;
+        //else {
+        //    std::cout << "Error activating hotspot" << std::endl;
+        //    return 1;
+        // }
     }
-    if(hotspotactive) std::cout << "Hotspot active" << std::endl;
-    else {
-        std::cout << "Error activating hotspot" << std::endl;
-        return 1;
-    }
+    
     sendCommand(fd, "hostname -I");
-    response = readResponse(fd, 3);
+    response = readResponse(fd, 1);
 
     std::string ip = (response.size() >= 3) ? split(response[2])[0] : "10.42.0.1";
     std::cout << "IP: " << ip << std::endl;

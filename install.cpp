@@ -13,13 +13,17 @@ int main(int argc, char* argv[]){
             std::cout << std::endl;
             return 1;
         }
+    const std::string oldWifi_config = "const std::string wifi_config = \"wifi_config\";";
+    const std::string newWifi_config = "const std::string wifi_config = \"" + cwd() + "/wifi_config\";";
 	const std::string oldline = "const std::string connect = \"connect.sh\";";
     const std::string newline = "const std::string connect = \"" + cwd() + "/connect.sh\";";
     const std::string mainFile = "main.cpp";
     rewriteLine(mainFile, oldline, newline);
+    rewriteLine(mainFile, oldWifi_config, newWifi_config);
     std::string cmd = belder[0] + " main.cpp -o " + name;
     system(cmd.c_str());
     rewriteLine(mainFile, newline, oldline);
+    rewriteLine(mainFile, newWifi_config, oldWifi_config);
     auto self = getPathByAlias(name);
     if(self.size() == 0) {
         manage_alias(name, {"add_alias"});

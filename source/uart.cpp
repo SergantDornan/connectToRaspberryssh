@@ -79,8 +79,8 @@ std::vector<std::string> readResponse(int fd, int timeout_sec) {
         else if (n == 0) {
             // Нет данных, увеличиваем счётчик
             no_data_count++;
-            // Если уже что-то получили и данных больше нет 2 секунды подряд
-            if (response != "" && no_data_count > 20) break;
+            // Если уже что-то получили и данных больше нет 0.5 секунды подряд
+            if (response != "" && no_data_count > 5) break;
         } 
         else {
             // Ошибка чтения
