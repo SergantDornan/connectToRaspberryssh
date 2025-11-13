@@ -56,7 +56,7 @@ int sendCommand(int fd, const std::string& command) {
 }
 
 
-std::vector<std::string> readResponse(int fd, int timeout_sec) {
+std::vector<std::string> readResponse(int fd, double timeout_sec) {
     char buffer[256];
     std::string response = "";
     int n;
@@ -79,8 +79,8 @@ std::vector<std::string> readResponse(int fd, int timeout_sec) {
         else if (n == 0) {
             // Нет данных, увеличиваем счётчик
             no_data_count++;
-            // Если уже что-то получили и данных больше нет 0.5 секунды подряд
-            if (response != "" && no_data_count > 5) break;
+            // Если уже что-то получили и данных больше нет 0.1 секунды подряд
+            if (response != "" && no_data_count > 1) break;
         } 
         else {
             // Ошибка чтения

@@ -123,17 +123,19 @@ int main(int argc, char* argv[]) {
 
     // login:
     sendCommand(fd, "ls");
-    auto response = readResponse(fd, 1);
+    auto response = readResponse(fd, 0.2);
+
     if (response.size() == 2 && response[0] == "ls" && response[1] == "Password:"){
         std::cout << "Trying to login..." << std::endl; 
         sendCommand(fd, "");
         usleep(5000000);
         sendCommand(fd, login);
-        usleep(100000);
-        response = readResponse(fd, 1);
+        usleep(5000000);
+        response = readResponse(fd, 5);
+
         sendCommand(fd, password);
-        usleep(500000);
-        response = readResponse(fd, 1);
+        usleep(5000000);
+        response = readResponse(fd, 5);
         if(response.size() > 0 && response[0] == "Login incorrect"){
             std::cout << "Login incorrect" << std::endl;
             std::cout << std::endl;
@@ -146,32 +148,39 @@ int main(int argc, char* argv[]) {
     std::cout << "Turning wifi on..." << std::endl;
     std::string cmd = "sudo nmcli radio wifi on";
     sendCommand(fd, cmd);
-    response = readResponse(fd, 1);
+    response = readResponse(fd, 0.2);
 
     bool needAuth = false;
     for(int i = 0; i < response.size(); ++i){
         if(response[i].find("[sudo] password for " + login + ":") != std::string::npos){
-            std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAa" << std::endl;
             needAuth = true;
             break;
         }
     }
     if(needAuth){
         sendCommand(fd, password);
-        response = readResponse(fd, 1);
+        response = readResponse(fd, 0.2);
     }
-
+    usleep(5000000);
     if(use_real_wifi){
-        std::cout << "Conncecting to " << parameters[4] << " newtwork...";
-        cmd = "sudo nmcli d wifi connect " + parameters[4] << " password " << parameters[5];
+        std::cout << "Conncecting to " << parameters[4] << " newtwork..." << std::endl;
+        cmd = "sudo nmcli d wifi connect " + parameters[4] + " password " + parameters[5];
         sendCommand(fd, cmd);
-        response = readResponse(fd, 1);
+        response = readResponse(fd, 0.2);
+
+        for(int i = 0; i < response.size(); ++i){
+            if(response[i].find("Error: No network with SSID") != std::string::npos){
+                std::cout << "Error: No network with SSID " << parameters[4] << " found" << std::endl;
+                std::cout << std::endl;
+                return 1;
+            }
+        }
     }
     else{
         std::cout << "Activating hotspot..." << std::endl;
         cmd = "sudo nmcli device wifi hotspot ifname wlan0 ssid " + hotspotSSID + " password " + hotstopPassword;
         sendCommand(fd, cmd);
-        response = readResponse(fd, 1);
+        response = readResponse(fd, 0.2);
         bool hotspotactive = false;
         for(int i = 0; i < response.size(); ++i){
             if(response[i].find("Device 'wlan0' successfully activated with")  != std::string::npos){
@@ -186,8 +195,23 @@ int main(int argc, char* argv[]) {
         // }
     }
     
+
+    while (true){
+        sendCommand(fd, "hostname -I");
+        response = readResponse(fd, 0.2);
+        bool b = false;
+        for(int i = 0; i < response.size(); ++i){
+            if(response[i].find("Device 'wlan0' successfully activated with") != std::string::npos){
+                std::cout << "SUCCESS" << std::endl;
+                b = true;
+                break;
+            }
+        }
+        if(b) break;
+    }
+    
     sendCommand(fd, "hostname -I");
-    response = readResponse(fd, 1);
+    response = readResponse(fd, 0.2);
 
     std::string ip = (response.size() >= 3) ? split(response[2])[0] : "10.42.0.1";
     std::cout << "IP: " << ip << std::endl;
@@ -196,8 +220,8 @@ int main(int argc, char* argv[]) {
     int code = system("sudo nmcli radio wifi on");
     if(code != 0) return 1;
     usleep(5000000);
-    std::cout << "Conncecting pc to raspberry network..." << std::endl;
-    cmd = "sudo nmcli d wifi connect \"" + hotspotSSID + "\" password \"" + hotstopPassword + "\"";
+    std::cout << "Conncecting pc to " << ((use_real_wifi) ? parameters[4] : "raspberry") << " network..." << std::endl;
+    cmd = "sudo nmcli d wifi connect \"" + ((use_real_wifi) ? parameters[4] : hotspotSSID) + "\" password \"" + ((use_real_wifi) ? parameters[5] : hotstopPassword) + "\"";
     code = system(cmd.c_str());
     if(code != 0) return 1;
     close(fd);
